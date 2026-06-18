@@ -1,0 +1,48 @@
+name: CI
+on:
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  # ===== بوابة الجودة السريعة =====
+  quality:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: '22', cache: 'npm' }
+      - run: npm ci
+      - name: فحص التنسيق
+        run: npm run format:check
+      - name: فحص الكود
+        run: npm run lint
+      - name: فحص الأنواع
+        run: npm run typecheck
+
+  # ===== اختبارات الوحدة والتكامل =====
+  test:
+    needs: quality
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: '22', cache: 'npm' }
+      - run: npm ci
+      - name: اختبارات الوحدة والتكامل
+        run: npm run test
+      - name: التأكد أن البناء ينجح
+        run: npm run build
+
+  # ===== اختبارات E2E =====
+  e2e:
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: '22', cache: 'npm' }
+      - run: npm ci
+      - name: تثبيت متصفحات Playwright
+        run: npx playwright install --with-deps chromium
+      - name: اختبارات E2E
+        run: npm run test:e2e

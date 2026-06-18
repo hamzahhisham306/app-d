@@ -1,46 +1,45 @@
 name: Deploy
-
-# يعمل عند كل دفع على فرع main
 on:
   push:
     branches: [ main ]
 
 jobs:
-  build-and-deploy:
+  # 1) بوابة الاختبار أولًا
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: '22', cache: 'npm' }
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run test
+      - run: npm run build
+
+  # 2) البناء والنشر — فقط بعد نجاح الاختبارات
+  deploy:
+    needs: test          # ← البوابة: لا نشر دون نجاح test
     runs-on: ubuntu-latest
     permissions:
       contents: read
-      packages: write    # للسماح بدفع الصورة لـ GHCR
-
+      packages: write
     steps:
-      # 1) جلب الكود
       - uses: actions/checkout@v4
-
-      # 2) تحويل اسم الصورة لأحرف صغيرة (GHCR يتطلب ذلك)
       - name: Set lowercase image name
         run: echo "IMAGE=ghcr.io/${GITHUB_REPOSITORY,,}" >> "$GITHUB_ENV"
-
-      # 3) تسجيل الدخول إلى GHCR (بالتوكن المدمج تلقائيًا)
-      - name: Login to GHCR
-        uses: docker/login-action@v3
+      - uses: docker/login-action@v3
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
-
-      # 4) بناء الصورة ودفعها بوسمين
-      - name: Build & push image
-        uses: docker/build-push-action@v5
+      - uses: docker/build-push-action@v5
         with:
           context: .
           push: true
           tags: |
             ${{ env.IMAGE }}:latest
             ${{ env.IMAGE }}:${{ github.sha }}
-
-      # 5) الاتصال بالخادم وتشغيل النشر
-      - name: Deploy via SSH
-        uses: appleboy/ssh-action@v1
+      - uses: appleboy/ssh-action@v1
         with:
           host: ${{ secrets.VPS_HOST }}
           username: ${{ secrets.VPS_USER }}
